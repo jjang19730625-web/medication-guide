@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>복약지도서 🏥</title>
+
+  <!-- PDF 생성 라이브러리 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+
+    :root {
+      --blue: #2196c0;
+      --green: #27ae8a;
+      --light-blue: #e8f4fd;
+      --light-green: #edfaf4;
+      --yellow: #fff8e1;
+      --orange: #ff8f00;
+      --red-bg: #fff0f0;
+      --red: #e53935;
+      --purple-bg: #f3f0ff;
+      --purple: #6b49c8;
+      --text: #1a2d3d;
+      --muted: #5a7a8a;
+      --border: #e0eef4;
+      --shadow: 0 4px 24px rgba(0,100,150,0.09);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(160deg, #dff0fc 0%, #e8f8ef 50%, #fef9ec 100%);
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+      color: var(--text);
+    }
+
+    .wrap { max-width: 680px; margin: 0 auto; }
+
+    /* ── Header ── */
+    .hero { text-align: center; padding: 28px 0 20px; }
+    .hero-icon { font-size: 72px; line-height: 1; margin-bottom: 10px; }
+    .hero h1 { font-size: 28px; font-weight: 900; color: #0d4c70; letter-spacing: -1px; }
+    .hero p  { font-size: 14px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+
+    .demo-badge {
+      display: none;
+      background: #fff3cd; border: 1.5px solid #ffc107;
+      color: #7a5200; font-size: 12px; font-weight: 600;
+      padding: 7px 16px; border-radius: 20px;
+      margin: 0 auto 6px; width: fit-content;
+    }
+    .demo-badge.show { display: block; }
+
+    /* ── Card ── */
+    .card {
+      background: white; border-radius: 22px;
+      padding: 28px 26px; box-shadow: var(--shadow); margin-bottom: 18px;
+    }
+
+    /* ── Form ── */
+    .form-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12.5px; font-weight: 700; color: var(--muted);
+      letter-spacing: 0.3px; margin-bottom: 7px; text-transform: uppercase;
+    }
+    .field input {
+      width: 100%; padding: 13px 16px;
+      border: 2px solid var(--border); border-radius: 13px;
+      font-size: 15px; font-family: inherit; color: var(--text);
+      outline: none; transition: border-color .2s, box-shadow .2s; background: #fafcfe;
+    }
+    .field input:focus {
+      border-color: var(--blue); background: white;
+      box-shadow: 0 0 0 4px rgba(33,150,192,.1);
+    }
+    .field input::placeholder { color: #b0c8d4; }
+
+    .submit-btn {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--blue) 0%, var(--green) 100%);
+      color: white; border: none; border-radius: 15px;
+      font-size: 16px; font-weight: 700; font-family: inherit;
+      letter-spacing: 0.5px; cursor: pointer;
+      transition: transform .15s, box-shadow .15s, opacity .2s; margin-top: 2px;
+    }
+    .submit-btn:hover   { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(33,150,192,.3); }
+    .submit-btn:active  { transform: translateY(0); }
+    .submit-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* ── Loading ── */
+    #loading { display:none; text-align:center; padding: 44px 20px; }
+    #loading.show { display:block; }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 5px solid var(--light-blue); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: var(--muted); font-size: 14px; }
+
+    .err {
+      display: none; background: var(--red-bg);
+      border: 2px solid #ffcdd2; color: var(--red);
+      border-radius: 12px; padding: 13px 17px; font-size: 14px; margin-top: 12px;
+    }
+    .err.show { display: block; }
+
+    /* ── Result ── */
+    #result { display:none; }
+    #result.show { display:block; }
+
+    .result-top {
+      background: linear-gradient(135deg, var(--blue) 0%, var(--green) 100%);
+      border-radius: 18px; padding: 22px 24px; color: white;
+      margin-bottom: 14px; display: flex;
+      justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .patient-name { font-size: 22px; font-weight: 900; }
+    .patient-meta { font-size: 13px; opacity: .85; margin-top: 3px; }
+    .age-chip {
+      background: rgba(255,255,255,.22); border: 1.5px solid rgba(255,255,255,.4);
+      padding: 6px 16px; border-radius: 30px;
+      font-size: 13px; font-weight: 700; white-space: nowrap;
+    }
+
+    /* ── Sections ── */
+    .sec { border-radius: 16px; padding: 18px 20px; margin-bottom: 12px; }
+    .sec-title {
+      font-size: 13px; font-weight: 800; letter-spacing: .5px;
+      text-transform: uppercase; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sec-body { font-size: 15px; line-height: 1.75; color: var(--text); }
+
+    .sec-efficacy            { background: var(--light-blue); }
+    .sec-efficacy .sec-title { color: #0d6a9e; }
+    .sec-dosage              { background: var(--light-green); }
+    .sec-dosage .sec-title   { color: #1a7a5e; }
+    .sec-side                { background: var(--yellow); }
+    .sec-side .sec-title     { color: var(--orange); }
+    .sec-tips                { background: var(--purple-bg); }
+    .sec-tips .sec-title     { color: var(--purple); }
+    .sec-warning             { background: var(--red-bg); border: 2px solid #ffcdd2; }
+    .sec-warning .sec-title  { color: var(--red); }
+
+    .side-list { list-style:none; padding:0; }
+    .side-list li {
+      padding: 9px 0 9px 22px; border-bottom: 1px solid rgba(0,0,0,.07);
+      font-size: 15px; line-height: 1.65; color: var(--text); position: relative;
+    }
+    .side-list li:last-child { border-bottom: none; padding-bottom: 0; }
+    .side-list li::before {
+      content: '●'; position: absolute; left: 2px;
+      color: var(--orange); font-size: 9px; top: 13px;
+    }
+
+    .age-label-pill {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      color: white; font-size: 11px; font-weight: 700;
+      padding: 2px 10px; border-radius: 20px; margin-bottom: 14px;
+    }
+    .divider { border: none; border-top: 2px dashed var(--border); margin: 4px 0 16px; }
+
+    /* ── 인쇄 전용 헤더 (화면에서 숨김) ── */
+    .print-header { display: none; }
+
+    /* ── 액션 버튼 3개 ── */
+    .action-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .action-btn {
+      padding: 14px 8px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform .15s, box-shadow .15s, background .2s;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+    }
+    .action-btn:hover   { transform: translateY(-2px); }
+    .action-btn:active  { transform: translateY(0); }
+    .action-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .action-btn .btn-icon { font-size: 22px; }
+    .action-btn .btn-label { font-size: 12px; }
+
+    .btn-print {
+      background: white; color: var(--blue); border-color: var(--blue);
+    }
+    .btn-print:hover { background: var(--light-blue); box-shadow: 0 4px 14px rgba(33,150,192,.2); }
+
+    .btn-pdf {
+      background: linear-gradient(135deg, var(--blue), var(--green));
+      color: white; border-color: transparent;
+    }
+    .btn-pdf:hover { box-shadow: 0 4px 18px rgba(33,150,192,.35); }
+
+    .btn-save {
+      background: white; color: var(--green); border-color: var(--green);
+    }
+    .btn-save:hover { background: var(--light-green); box-shadow: 0 4px 14px rgba(39,174,138,.2); }
+
+    /* 로딩 오버레이 (PDF 생성 중) */
+    .pdf-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 1000;
+      align-items: center; justify-content: center;
+    }
+    .pdf-overlay.show { display: flex; }
+    .pdf-box {
+      background: white; border-radius: 20px;
+      padding: 32px 40px; text-align: center;
+      box-shadow: 0 16px 48px rgba(0,0,0,.2);
+    }
+    .pdf-spinner {
+      width: 48px; height: 48px;
+      border: 5px solid var(--light-blue); border-top-color: var(--blue);
+      border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px;
+    }
+    .pdf-box p { color: var(--muted); font-size: 14px; }
+
+    /* ── 토스트 알림 ── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(60px);
+      background: #1a2d3d; color: white;
+      padding: 12px 22px; border-radius: 30px;
+      font-size: 14px; font-weight: 600;
+      opacity: 0; transition: transform .3s ease, opacity .3s ease;
+      z-index: 999; white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    /* ── 저장된 목록 ── */
+    #savedSection { display: none; }
+    #savedSection.show { display: block; }
+
+    .saved-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .saved-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .clear-all-btn {
+      font-size: 12px; color: var(--red); background: none;
+      border: none; cursor: pointer; font-family: inherit; font-weight: 600; padding: 4px 8px;
+    }
+    .clear-all-btn:hover { text-decoration: underline; }
+
+    .saved-list { display: flex; flex-direction: column; gap: 10px; }
+    .saved-item {
+      background: white; border-radius: 14px;
+      padding: 14px 16px; box-shadow: 0 2px 10px rgba(0,100,150,.07);
+      display: flex; align-items: center; gap: 12px; cursor: pointer;
+      transition: box-shadow .2s, transform .15s;
+      border: 2px solid transparent;
+    }
+    .saved-item:hover { box-shadow: 0 4px 18px rgba(0,100,150,.13); transform: translateY(-1px); border-color: var(--border); }
+    .saved-item-icon { font-size: 28px; flex-shrink: 0; }
+    .saved-item-info { flex: 1; min-width: 0; }
+    .saved-item-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .saved-item-meta { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .saved-delete-btn {
+      background: none; border: none; color: #b0c0cc;
+      font-size: 18px; cursor: pointer; padding: 4px; flex-shrink: 0; line-height: 1;
+      transition: color .2s;
+    }
+    .saved-delete-btn:hover { color: var(--red); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; color: #8ab5c5;
+      font-size: 12px; padding: 16px 0 4px; line-height: 1.7;
+    }
+
+    /* ─────────────────────────────────────────────
+       인쇄 / PDF 전용 스타일
+    ───────────────────────────────────────────── */
+    @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+      body {
+        background: white !important;
+        padding: 0 !important;
+        font-family: 'Noto Sans KR', sans-serif;
+      }
+
+      /* 화면 UI 모두 숨김 */
+      .hero, .demo-badge, .card:has(form), #loading, .err,
+      .action-bar, #savedSection, footer, .pdf-overlay, .toast { display: none !important; }
+
+      .wrap { max-width: 100%; margin: 0; }
+
+      /* 결과 강제 표시 */
+      #result { display: block !important; }
+
+      /* 인쇄 전용 헤더 표시 */
+      .print-header {
+        display: block !important;
+        text-align: center;
+        padding: 20px 20px 12px;
+        border-bottom: 3px solid #2196c0;
+        margin-bottom: 16px;
+      }
+      .print-header h2 { font-size: 20px; font-weight: 900; color: #0d4c70; }
+      .print-header p  { font-size: 11px; color: #666; margin-top: 4px; }
+
+      .result-top {
+        background: linear-gradient(135deg, #2196c0, #27ae8a) !important;
+        border-radius: 12px !important;
+        margin: 0 16px 12px !important;
+        page-break-inside: avoid;
+      }
+      .card { box-shadow: none !important; border-radius: 0 !important; padding: 16px 20px !important; margin: 0 !important; }
+      .sec { break-inside: avoid; border-radius: 10px !important; margin-bottom: 10px !important; }
+      .sec-efficacy { background: #e8f4fd !important; }
+      .sec-dosage   { background: #edfaf4 !important; }
+      .sec-side     { background: #fff8e1 !important; }
+      .sec-tips     { background: #f3f0ff !important; }
+      .sec-warning  { background: #fff0f0 !important; border: 2px solid #ffcdd2 !important; }
+
+      .print-footer-note {
+        display: block !important;
+        text-align: center; font-size: 10px; color: #999;
+        padding: 12px 20px; border-top: 1px solid #eee; margin-top: 8px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .form-row { grid-template-columns: 1fr; }
+      .result-top { flex-direction: column; align-items: flex-start; }
+      .action-bar { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 헤더 -->
+  <div class="hero">
+    <div class="hero-icon">👩‍⚕️</div>
+    <h1>복약지도서</h1>
+    <p>이름, 나이, 약 이름을 입력하시면<br>알기 쉽게 설명해 드릴게요</p>
+  </div>
+
+  <div class="demo-badge" id="demoBadge">
+    ⚠️ 데모 모드 — API 키를 .env에 입력하면 실제 약품 정보를 조회합니다
+  </div>
+
+  <!-- 입력 폼 -->
+  <div class="card">
+    <form id="form">
+      <div class="form-row">
+        <div class="field">
+          <label>👤 환자 이름</label>
+          <input id="name" type="text" placeholder="홍길동" required />
+        </div>
+        <div class="field">
+          <label>🎂 나이</label>
+          <input id="age" type="number" placeholder="35" min="0" max="120" required />
+        </div>
+      </div>
+      <div class="field">
+        <label>💊 약품명</label>
+        <input id="medication" type="text" placeholder="타이레놀, 아스피린, 아목시실린…" required />
+      </div>
+      <button type="submit" class="submit-btn" id="submitBtn">
+        📋 복약지도서 만들기
+      </button>
+      <div class="err" id="errMsg"></div>
+    </form>
+  </div>
+
+  <!-- 로딩 -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>간호사 선생님이 설명을 준비하고 있어요…</p>
+  </div>
+
+  <!-- 결과 -->
+  <div id="result">
+
+    <!-- 인쇄/PDF 전용 상단 헤더 -->
+    <div class="print-header">
+      <h2>🏥 복약지도서</h2>
+      <p id="printDate"></p>
+    </div>
+
+    <div class="result-top">
+      <div>
+        <div class="patient-name" id="rName"></div>
+        <div class="patient-meta" id="rMeta"></div>
+      </div>
+      <div class="age-chip" id="rAgeChip"></div>
+    </div>
+
+    <!-- 인쇄 영역 (PDF 캡처 대상) -->
+    <div id="printArea">
+      <div class="card" style="padding-top:22px">
+        <div class="age-label-pill" id="rAgeLabel"></div>
+        <hr class="divider" />
+
+        <div class="sec sec-efficacy">
+          <div class="sec-title">💊 이 약은 무엇인가요?</div>
+          <div class="sec-body" id="rEfficacy"></div>
+        </div>
+        <div class="sec sec-dosage">
+          <div class="sec-title">🕐 어떻게 복용하나요?</div>
+          <div class="sec-body" id="rDosage"></div>
+        </div>
+        <div class="sec sec-side">
+          <div class="sec-title">⚠️ 이런 증상이 나타날 수 있어요</div>
+          <ul class="side-list" id="rSide"></ul>
+        </div>
+        <div class="sec sec-tips">
+          <div class="sec-title">💡 꼭 기억하세요!</div>
+          <div class="sec-body" id="rTips"></div>
+        </div>
+        <div class="sec sec-warning">
+          <div class="sec-title">🚨 즉시 병원에 오세요</div>
+          <div class="sec-body" id="rWarning"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 인쇄 전용 하단 주의문 -->
+    <div class="print-footer-note" style="display:none">
+      ⓘ 본 복약지도서는 참고용입니다. 정확한 복용법은 담당 의사·약사에게 반드시 확인하세요.
+    </div>
+
+    <!-- 액션 버튼 3개 -->
+    <div class="action-bar">
+      <button class="action-btn btn-print" id="btnPrint">
+        <span class="btn-icon">🖨️</span>
+        <span class="btn-label">인쇄</span>
+      </button>
+      <button class="action-btn btn-pdf" id="btnPdf">
+        <span class="btn-icon">📄</span>
+        <span class="btn-label">PDF 저장</span>
+      </button>
+      <button class="action-btn btn-save" id="btnSave">
+        <span class="btn-icon">💾</span>
+        <span class="btn-label">저장하기</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 저장된 복약지도서 목록 -->
+  <div id="savedSection">
+    <div class="card">
+      <div class="saved-header">
+        <span class="saved-title">💾 저장된 복약지도서</span>
+        <button class="clear-all-btn" id="clearAllBtn">전체 삭제</button>
+      </div>
+      <div class="saved-list" id="savedList"></div>
+    </div>
+  </div>
+
+  <footer>
+    ⓘ 이 복약지도서는 참고용입니다.<br>
+    정확한 복용법은 담당 의사 · 약사에게 반드시 확인하세요.
+  </footer>
+</div>
+
+<!-- PDF 생성 중 오버레이 -->
+<div class="pdf-overlay" id="pdfOverlay">
+  <div class="pdf-box">
+    <div class="pdf-spinner"></div>
+    <p>PDF를 생성하고 있어요…</p>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── 서버 상태 ──
+  fetch('/api/status').then(r => r.json()).then(d => {
+    if (!d.hasApiKey) document.getElementById('demoBadge').classList.add('show');
+  }).catch(() => {});
+
+  const form      = document.getElementById('form');
+  const loading   = document.getElementById('loading');
+  const result    = document.getElementById('result');
+  const errMsg    = document.getElementById('errMsg');
+  const submitBtn = document.getElementById('submitBtn');
+
+  let currentData = null; // 현재 표시 중인 데이터
+
+  function ageIcon(age) {
+    if (age <= 5)  return '👶';
+    if (age <= 12) return '🧒';
+    if (age <= 19) return '🧑';
+    if (age <= 64) return '🙋';
+    return '👴';
+  }
+
+  // ── 토스트 ──
+  function showToast(msg, duration = 2400) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  // ── 결과 채우기 ──
+  function fillResult(data) {
+    const age = parseInt(data.age);
+    document.getElementById('rName').textContent     = `${data.name} 님`;
+    document.getElementById('rMeta').textContent     = `${data.age}세 · 복용 약품: ${data.drugName || data.medication || ''}`;
+    document.getElementById('rAgeChip').textContent  = `${ageIcon(age)} ${data.ageGroup}`;
+    document.getElementById('rAgeLabel').textContent = `${ageIcon(age)} ${data.ageGroup} 맞춤 안내`;
+    document.getElementById('rEfficacy').textContent = data.efficacy;
+    document.getElementById('rDosage').textContent   = data.dosage;
+    document.getElementById('rTips').textContent     = data.tips;
+    document.getElementById('rWarning').textContent  = data.warning;
+    document.getElementById('printDate').textContent =
+      `발행일: ${new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' })}`;
+
+    const sideEl = document.getElementById('rSide');
+    sideEl.innerHTML = '';
+    const sides = Array.isArray(data.sideEffects)
+      ? data.sideEffects
+      : String(data.sideEffects).split('\n').filter(s => s.trim());
+    sides.forEach(s => {
+      const li = document.createElement('li');
+      li.textContent = s.replace(/^[-•·●\d.]\s*/, '').trim();
+      sideEl.appendChild(li);
+    });
+  }
+
+  // ── 폼 제출 ──
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const name       = document.getElementById('name').value.trim();
+    const age        = parseInt(document.getElementById('age').value);
+    const medication = document.getElementById('medication').value.trim();
+
+    result.classList.remove('show');
+    errMsg.classList.remove('show');
+    loading.classList.add('show');
+    submitBtn.disabled = true;
+
+    try {
+      const res  = await fetch('/api/medication', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, age, medication }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || '오류가 발생했습니다.');
+
+      currentData = { ...data, medication };
+      fillResult(currentData);
+      result.classList.add('show');
+      result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      errMsg.textContent = err.message;
+      errMsg.classList.add('show');
+    } finally {
+      loading.classList.remove('show');
+      submitBtn.disabled = false;
+    }
+  });
+
+  // ══════════════════════════════════════════
+  //  🖨️  인쇄
+  // ══════════════════════════════════════════
+  document.getElementById('btnPrint').addEventListener('click', () => {
+    window.print();
+  });
+
+  // ══════════════════════════════════════════
+  //  📄  PDF 저장  (html2canvas + jsPDF)
+  // ══════════════════════════════════════════
+  document.getElementById('btnPdf').addEventListener('click', async () => {
+    if (!currentData) return;
+
+    const overlay = document.getElementById('pdfOverlay');
+    overlay.classList.add('show');
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const captureEl = document.getElementById('printArea');
+
+      // 버튼 잠시 숨김 (캡처 영역 밖이라 불필요하지만 혹시 모르니)
+      const canvas = await html2canvas(captureEl, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f5faff',
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const pageW  = pdf.internal.pageSize.getWidth();   // 210mm
+      const pageH  = pdf.internal.pageSize.getHeight();  // 297mm
+      const margin = 12;
+      const contentW = pageW - margin * 2;
+
+      // mm per pixel
+      const mmPerPx   = contentW / canvas.width;
+      const totalH_mm = canvas.height * mmPerPx;
+
+      // 헤더 (텍스트)
+      const headerH = 18;
+      pdf.setFillColor(33, 150, 192);
+      pdf.rect(0, 0, pageW, headerH, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(13);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Medication Guide', margin, 12);
+      const dateStr = new Date().toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' });
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(dateStr, pageW - margin, 12, { align: 'right' });
+
+      // 환자 정보 줄
+      const infoY = headerH + 8;
+      pdf.setTextColor(26, 45, 61);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+
+      // 이미지 시작 Y
+      const imgStartY = infoY + 6;
+      const availH    = pageH - imgStartY - margin; // 첫 페이지 사용 가능 높이
+
+      if (totalH_mm <= availH) {
+        // 한 페이지에 다 들어갈 때
+        pdf.addImage(imgData, 'PNG', margin, imgStartY, contentW, totalH_mm);
+      } else {
+        // 여러 페이지로 분할
+        const sliceH_px  = Math.floor(availH / mmPerPx); // 첫 페이지 픽셀 높이
+        const normalSlicePx = Math.floor((pageH - margin * 2) / mmPerPx);
+
+        let drawnPx = 0;
+
+        // 각 슬라이스를 별도 캔버스로 잘라 붙이기
+        const slices = [];
+        let remaining = canvas.height;
+        let first = true;
+        while (remaining > 0) {
+          const slicePx = first ? sliceH_px : normalSlicePx;
+          const actualPx = Math.min(slicePx, remaining);
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width  = canvas.width;
+          sliceCanvas.height = actualPx;
+          const ctx = sliceCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, drawnPx, canvas.width, actualPx, 0, 0, canvas.width, actualPx);
+          slices.push({ img: sliceCanvas.toDataURL('image/png'), h: actualPx * mmPerPx, first });
+          drawnPx   += actualPx;
+          remaining -= actualPx;
+          first = false;
+        }
+
+        slices.forEach((s, i) => {
+          if (i > 0) pdf.addPage();
+          const yStart = s.first ? imgStartY : margin;
+          pdf.addImage(s.img, 'PNG', margin, yStart, contentW, s.h);
+        });
+      }
+
+      // 하단 주의 문구
+      const lastPageH = pdf.internal.pageSize.getHeight();
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text('이 복약지도서는 참고용입니다. 정확한 복용법은 담당 의사·약사에게 확인하세요.', pageW / 2, lastPageH - 6, { align: 'center' });
+
+      // 파일명: 복약지도서_이름_약품명_날짜.pdf
+      const today = new Date().toISOString().slice(0, 10);
+      const safeName = (currentData.name || '환자').replace(/\s/g, '');
+      const safeDrug = (currentData.drugName || currentData.medication || '').split('(')[0].trim().replace(/\s/g, '');
+      pdf.save(`복약지도서_${safeName}_${safeDrug}_${today}.pdf`);
+      showToast('📄 PDF가 저장됐어요!');
+    } catch (err) {
+      console.error(err);
+      showToast('❌ PDF 생성 중 오류가 발생했어요');
+    } finally {
+      overlay.classList.remove('show');
+    }
+  });
+
+  // ══════════════════════════════════════════
+  //  💾  저장하기  (localStorage)
+  // ══════════════════════════════════════════
+  const STORAGE_KEY = 'med-guides-v1';
+
+  function loadSaved() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+    catch { return []; }
+  }
+
+  function persistSaved(list) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  }
+
+  function renderSavedList() {
+    const list = loadSaved();
+    const section = document.getElementById('savedSection');
+    const container = document.getElementById('savedList');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+      section.classList.remove('show');
+      return;
+    }
+    section.classList.add('show');
+
+    list.slice().reverse().forEach((item) => {
+      const div = document.createElement('div');
+      div.className = 'saved-item';
+
+      const dateStr = new Date(item.savedAt).toLocaleDateString('ko-KR', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+
+      div.innerHTML = `
+        <div class="saved-item-icon">${ageIcon(parseInt(item.age))}</div>
+        <div class="saved-item-info">
+          <div class="saved-item-name">${item.name} · ${item.age}세 · ${item.drugName || item.medication}</div>
+          <div class="saved-item-meta">${item.ageGroup} · ${dateStr}</div>
+        </div>
+        <button class="saved-delete-btn" data-id="${item.id}" title="삭제">×</button>
+      `;
+
+      // 클릭 시 해당 가이드 복원
+      div.addEventListener('click', (e) => {
+        if (e.target.classList.contains('saved-delete-btn')) return;
+        currentData = item;
+        fillResult(item);
+        result.classList.add('show');
+        result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast(`📋 ${item.name} 님의 복약지도서를 불러왔어요`);
+      });
+
+      // 삭제 버튼
+      div.querySelector('.saved-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = e.target.dataset.id;
+        const updated = loadSaved().filter(g => g.id !== id);
+        persistSaved(updated);
+        renderSavedList();
+        showToast('🗑️ 삭제됐어요');
+      });
+
+      container.appendChild(div);
+    });
+  }
+
+  document.getElementById('btnSave').addEventListener('click', () => {
+    if (!currentData) return;
+
+    const list = loadSaved();
+    // 중복 저장 방지 (같은 이름+약품명이면 덮어씀)
+    const key = `${currentData.name}__${currentData.drugName || currentData.medication}`;
+    const existIdx = list.findIndex(g => `${g.name}__${g.drugName || g.medication}` === key);
+
+    const entry = { ...currentData, id: Date.now().toString(), savedAt: new Date().toISOString() };
+
+    if (existIdx >= 0) {
+      list[existIdx] = entry;
+      showToast('💾 덮어서 저장됐어요!');
+    } else {
+      list.push(entry);
+      showToast('💾 저장됐어요!');
+    }
+
+    persistSaved(list);
+    renderSavedList();
+  });
+
+  document.getElementById('clearAllBtn').addEventListener('click', () => {
+    if (!confirm('저장된 복약지도서를 모두 삭제할까요?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    renderSavedList();
+    showToast('🗑️ 전체 삭제됐어요');
+  });
+
+  // 페이지 로드 시 저장 목록 복원
+  renderSavedList();
+</script>
+</body>
+</html>

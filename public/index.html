@@ -360,6 +360,9 @@
   <div class="demo-badge" id="demoBadge">
     ⚠️ 데모 모드 — API 키를 .env에 입력하면 실제 약품 정보를 조회합니다
   </div>
+  <div class="demo-badge" id="creditsBadge" style="background:#ffe0e0;border-color:#e53935;color:#b71c1c;">
+    ⚠️ API 크레딧 부족 — 데모 데이터를 표시합니다. Anthropic 계정에서 크레딧을 충전해주세요.
+  </div>
 
   <!-- 입력 폼 -->
   <div class="card">
@@ -488,9 +491,43 @@
 <div class="toast" id="toast"></div>
 
 <script>
+  // ── 데모 사용 카운터 ──
+  const DEMO_LIMIT = 100;
+  const DEMO_COUNT_KEY = 'med-demo-count-v1';
+  const CREDITS_EMPTY_KEY = 'med-credits-empty';
+  let isServerDemoMode = false;
+
+  function getDemoCount() {
+    return parseInt(localStorage.getItem(DEMO_COUNT_KEY) || '0');
+  }
+  function incrementDemoCount() {
+    localStorage.setItem(DEMO_COUNT_KEY, getDemoCount() + 1);
+    updateDemoBadge();
+  }
+  function isEffectiveDemoMode() {
+    return isServerDemoMode || localStorage.getItem(CREDITS_EMPTY_KEY) === '1';
+  }
+  function updateDemoBadge() {
+    const count = getDemoCount();
+    const remaining = Math.max(0, DEMO_LIMIT - count);
+    if (isServerDemoMode) {
+      document.getElementById('demoBadge').innerHTML =
+        `⚠️ 데모 모드 — 남은 횟수: <strong>${remaining}</strong> / ${DEMO_LIMIT}회`;
+    }
+    if (localStorage.getItem(CREDITS_EMPTY_KEY) === '1') {
+      document.getElementById('creditsBadge').innerHTML =
+        `⚠️ API 크레딧 부족 — 데모 남은 횟수: <strong>${remaining}</strong> / ${DEMO_LIMIT}회`;
+      document.getElementById('creditsBadge').classList.add('show');
+    }
+  }
+
   // ── 서버 상태 ──
   fetch('/api/status').then(r => r.json()).then(d => {
-    if (!d.hasApiKey) document.getElementById('demoBadge').classList.add('show');
+    if (!d.hasApiKey) {
+      isServerDemoMode = true;
+      document.getElementById('demoBadge').classList.add('show');
+      updateDemoBadge();
+    }
   }).catch(() => {});
 
   const form      = document.getElementById('form');
@@ -552,6 +589,18 @@
 
     result.classList.remove('show');
     errMsg.classList.remove('show');
+
+    // 데모 모드 100건 한도 체크
+    if (isEffectiveDemoMode() && getDemoCount() >= DEMO_LIMIT) {
+      errMsg.innerHTML = `😢 데모 모드 사용 한도(${DEMO_LIMIT}건)를 초과했습니다.<br>
+        실제 서비스를 이용하려면 <a href="https://console.anthropic.com" target="_blank"
+        style="color:var(--blue);font-weight:700;">Anthropic 콘솔</a>에서 API 크레딧을 충전하고,
+        <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">.env</code> 파일에
+        <code style="background:#f0f4f8;padding:1px 5px;border-radius:4px;">ANTHROPIC_API_KEY</code>를 입력해주세요.`;
+      errMsg.classList.add('show');
+      return;
+    }
+
     loading.classList.add('show');
     submitBtn.disabled = true;
 
@@ -563,6 +612,14 @@
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || '오류가 발생했습니다.');
+
+      if (data.creditsEmpty) {
+        localStorage.setItem(CREDITS_EMPTY_KEY, '1');
+      }
+      if (data.demo || data.creditsEmpty) {
+        incrementDemoCount();
+      }
+      updateDemoBadge();
 
       currentData = { ...data, medication };
       fillResult(currentData);

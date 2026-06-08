@@ -97,6 +97,17 @@ app.post('/api/medication', async (req, res) => {
     res.json({ success: true, name, age, ageGroup: ageGroup.label, ...data });
   } catch (err) {
     console.error(err.message);
+    const status = err.status || err.statusCode || 0;
+    if (status === 402) {
+      // 크레딧 부족 → 데모 데이터로 폴백하여 앱이 계속 동작하게 함
+      return res.json({ success: true, demo: true, creditsEmpty: true, name, age, ageGroup: ageGroup.label, ...DEMO_DATA });
+    }
+    if (status === 401) {
+      return res.status(401).json({ error: 'API 키가 유효하지 않습니다. .env 파일의 ANTHROPIC_API_KEY를 확인해주세요.' });
+    }
+    if (status === 429) {
+      return res.status(429).json({ error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' });
+    }
     res.status(500).json({ error: `오류: ${err.message}` });
   }
 });
